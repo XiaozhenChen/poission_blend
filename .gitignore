@@ -1,0 +1,22 @@
+#directories
+
+
+bin-int/
+
+#files
+*.user
+
+# Binaries
+**/bin/
+!vendor/bin/premake/
+
+#opencv build lib and include directory
+vendor/build/
+vendor/include/
+
+# Visual Studio files and folder
+.vs/
+**.sln
+**.vcxproj
+**.vcxproj.filters
+**.vcxproj.user 

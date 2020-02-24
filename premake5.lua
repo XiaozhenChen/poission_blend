@@ -6,19 +6,14 @@ workspace "Poission"
 	configurations
 	{
 		"Debug",
-		"Release",
-		"Dist"
+		"Release"
+		
 	}
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 --include directories relative to root folder(solution direction)
 IncludeDir = {}
-IncludeDir["GLFW"] = "Hazel/vendor/GLFW/include"
-IncludeDir["Glad"] = "Hazel/vendor/Glad/include"
-IncludeDir["ImGui"] = "Hazel/vendor/imgui"
-IncludeDir["glm"]   = "Hazel/vendor/glm"
-IncludeDir["stb_image"] = "Hazel/vendor/stb_image"
 
 group "Dependencies"
 
@@ -62,7 +57,8 @@ project "Poission"
 
 	libdirs
 	{
-		"%{prj.name}/vendor/build/x64/vc14/lib"
+		"%{prj.name}/vendor/build/x64/vc14/lib",
+		"%{prj.name}/vendor/build/x86/vc14/lib"
 		
 	}
 

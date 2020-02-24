@@ -13,6 +13,14 @@ using namespace std;
 #define elif else if
 #define ATD at<double>
 
+
+Mat poission_blending(Mat& src, Mat& dst, Rect ROI, int posX, int posY);
+Mat getA(int hieght, int width);
+int getLabel(int i, int j, int height, int width);
+Mat getB1(Mat& src, Mat& dst, int posX, int posY, Rect rectSrc);
+Mat getB2(Mat& src, Mat& dst, int posX, int posY, Rect rectSrc);
+Mat getLaplacian();
+
 // calculate horizontal gradient, img(i, j + 1) - img(i, j)
 Mat
 getGradientXp(Mat& img) {
@@ -22,6 +30,10 @@ getGradientXp(Mat& img) {
 
 	Rect roi = Rect(1, 0, width, height);
 	Mat roimat = cat(roi);
+
+	cout << "roimat - img" << endl;
+
+	cout << roimat - img << endl;
 	return roimat - img;
 }
 
@@ -34,6 +46,10 @@ getGradientYp(Mat& img) {
 
 	Rect roi = Rect(0, 1, width, height);
 	Mat roimat = cat(roi);
+
+	cout << "roimat - img" << endl;
+	cout << roimat - img << endl;
+
 	return roimat - img;
 }
 
@@ -46,6 +62,10 @@ getGradientXn(Mat& img) {
 
 	Rect roi = Rect(width - 1, 0, width, height);
 	Mat roimat = cat(roi);
+
+	cout << "roimat - img" << endl;
+	cout << roimat - img << endl;
+
 	return roimat - img;
 }
 
@@ -58,18 +78,96 @@ getGradientYn(Mat& img) {
 
 	Rect roi = Rect(0, height - 1, width, height);
 	Mat roimat = cat(roi);
+
+	cout << "roimat - img" << endl;
+	cout << roimat - img << endl;
 	return roimat - img;
 }
 
-int
-getLabel(int i, int j, int height, int width) {
-	return i * width + j;
+Mat getResult(Mat& A, Mat& B, Rect& ROI)
+{
+	Mat result;
+	solve(A, B, result);
+	result = result.reshape(0, ROI.height);
+	cout << "result" << endl;
+	cout << result << endl;
+
+	return  result;
 }
 
-// get Matrix A.
-Mat
-getA(int height, int width) {
+int main(int argc, char** argv)
+{
+	long start, end;
+	start = clock();
 
+	Mat src, dst;
+	Mat srcImg = imread("tree.jpg");
+	Mat dstImg = imread("oceam.jpg");
+
+	srcImg.convertTo(src, CV_64FC3);
+	srcImg.convertTo(dst, CV_64FC3);
+
+	Rect rectSrc = Rect(200, 200, 4, 4);
+	Mat result = poission_blending(src, dst, rectSrc, 200, 200);
+	result.convertTo(result, CV_8UC1);
+	Rect rc2 = Rect(184, 220, 55, 90);
+	Mat roimat = dst(rc2);
+	result.copyTo(roimat);
+
+	end = clock();
+	cout << "used time: " << ((double)(end - start)) / CLOCKS_PER_SEC << " second" << endl;
+	imshow("roi", result);
+	imshow("result", dst);
+
+	waitKey(0);
+	return 0;
+
+}
+
+Mat poission_blending(Mat& src, Mat& dst, Rect ROI, int posX, int posY)
+{
+	int roiHeight = ROI.height;
+	int roiWidth  = ROI.width;
+
+	//Ax = b
+	Mat A = getA(roiHeight, roiWidth);
+
+	//do poission blending to each channel
+	vector<Mat> rgb1;
+	split(src, rgb1);
+	vector<Mat> rgb2;
+	split(dst, rgb2);
+
+	vector<Mat> result;
+	Mat merged, res, Br, Bg, Bb;
+
+	// For calculating B, you can use either getB1() or getB2()
+	Br = getB2(rgb1[0], rgb2[0], posX, posY, ROI);
+	//Br = getB2(rgb1[0], rgb2[0], posX, posY, ROI);
+	res = getResult(A, Br, ROI);
+	result.push_back(res);
+	cout << "R channel finished..." << endl;
+	Bg = getB2(rgb1[1], rgb2[1], posX, posY, ROI);
+	//Bg = getB2(rgb1[1], rgb2[1], posX, posY, ROI);
+	res = getResult(A, Bg, ROI);
+	result.push_back(res);
+	cout << "G channel finished..." << endl;
+	Bb = getB2(rgb1[2], rgb2[2], posX, posY, ROI);
+	//Bb = getB2(rgb1[2], rgb2[2], posX, posY, ROI);
+	res = getResult(A, Bb, ROI);
+	result.push_back(res);
+	cout << "B channel finished..." << endl;
+
+	// merge the 3 gray images into a 3-channel image 
+	merge(result, merged);
+	return merged;
+
+
+	return A;
+}
+
+Mat getA(int height, int width)
+{
 	Mat A = Mat::eye(height * width, height * width, CV_64FC1);
 	A *= -4;
 	Mat M = Mat::zeros(height, width, CV_64FC1);
@@ -87,15 +185,35 @@ getA(int height, int width) {
 	roimat = M(roi);
 	temp.copyTo(roimat);
 
-	for (int i = 0; i < height; i++) {
-		for (int j = 0; j < width; j++) {
+	cout << height<<" , "<<width << endl;
+	cout << "A" << endl;
+	cout << A << endl;
+	cout << "M" << endl;
+	cout << M << endl;
+	cout << "roimat" << endl;
+	cout << roimat << endl;
+	cout << "temp" << endl;
+	cout << temp << endl;
+
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
 			int label = getLabel(i, j, height, width);
-			if (M.ATD(i, j) == 0) {
-				if (i == 0)  A.ATD(getLabel(i + 1, j, height, width), label) = 1;
-				elif(i == height - 1)   A.ATD(getLabel(i - 1, j, height, width), label) = 1;
-				if (j == 0)  A.ATD(getLabel(i, j + 1, height, width), label) = 1;
-				elif(j == width - 1)   A.ATD(getLabel(i, j - 1, height, width), label) = 1;
-			}elif(M.ATD(i, j) == 1) {
+
+			if (M.ATD(i, j) == 0) // 边界条件
+			{
+				if (i == 0)  
+					A.ATD(getLabel(i + 1, j, height, width), label) = 1;
+				elif(i == height - 1)  
+					A.ATD(getLabel(i - 1, j, height, width), label) = 1;
+				if (j == 0)  
+					A.ATD(getLabel(i, j + 1, height, width), label) = 1;
+				elif(j == width - 1)  
+					A.ATD(getLabel(i, j - 1, height, width), label) = 1;
+			}
+			else if (M.ATD(i, j) == 1) // 边界条件
+			{
 				if (i == 0) {
 					A.ATD(getLabel(i + 1, j, height, width), label) = 1;
 					A.ATD(getLabel(i, j - 1, height, width), label) = 1;
@@ -114,35 +232,32 @@ getA(int height, int width) {
 					A.ATD(getLabel(i - 1, j, height, width), label) = 1;
 					A.ATD(getLabel(i + 1, j, height, width), label) = 1;
 				}
+	
 			}
-			else {
+
+			else 
+			{
 				A.ATD(getLabel(i, j - 1, height, width), label) = 1;
 				A.ATD(getLabel(i, j + 1, height, width), label) = 1;
 				A.ATD(getLabel(i - 1, j, height, width), label) = 1;
 				A.ATD(getLabel(i + 1, j, height, width), label) = 1;
+					
 			}
 		}
 	}
+	 
+	cout << "A" << endl;
+	cout << A << endl;
+
 	return A;
 }
 
-// Get the following Laplacian matrix
-// 0  1  0
-// 1 -4  1
-// 0  1  0
-Mat
-getLaplacian() {
-	Mat laplacian = Mat::zeros(3, 3, CV_64FC1);
-	laplacian.ATD(0, 1) = 1.0;
-	laplacian.ATD(1, 0) = 1.0;
-	laplacian.ATD(1, 2) = 1.0;
-	laplacian.ATD(2, 1) = 1.0;
-	laplacian.ATD(1, 1) = -4.0;
-	return laplacian;
+int getLabel(int i, int j, int height, int width)
+{
+	return i * width + j;
 }
 
-// Calculate b
-// using convolution.
+// B:   Ax = b  , B for b    use convolution
 Mat
 getB1(Mat& img1, Mat& img2, int posX, int posY, Rect ROI) {
 	Mat Lap;
@@ -169,6 +284,7 @@ getB1(Mat& img1, Mat& img2, int posX, int posY, Rect ROI) {
 Mat
 getB2(Mat& img1, Mat& img2, int posX, int posY, Rect ROI) {
 	Mat grad = getGradientXp(img1) + getGradientYp(img1) + getGradientXn(img1) + getGradientYn(img1);
+	
 	int roiheight = ROI.height;
 	int roiwidth = ROI.width;
 	Mat B = Mat::zeros(roiheight * roiwidth, 1, CV_64FC1);
@@ -186,93 +302,14 @@ getB2(Mat& img1, Mat& img2, int posX, int posY, Rect ROI) {
 	return B;
 }
 
-// Solve equation and reshape it back to the right height and width.
-Mat
-getResult(Mat& A, Mat& B, Rect& ROI) {
-	Mat result;
-	solve(A, B, result);
-	result = result.reshape(0, ROI.height);
-	return  result;
-}
 
-
-
-// img1: 3-channel image, we wanna move something in it into img2.
-// img2: 3-channel image, dst image.
-// ROI: the position and size of the block we want to move in img1.
-// posX, posY: where we want to move the block to in img2
-
-Mat
-poisson_blending(Mat& img1, Mat& img2, Rect ROI, int posX, int posY) {
-
-	int roiheight = ROI.height;
-	int roiwidth = ROI.width;
-	Mat A = getA(roiheight, roiwidth);
-
-	// we must do the poisson blending to each channel.
-	vector<Mat> rgb1;
-	split(img1, rgb1);
-	vector<Mat> rgb2;
-	split(img2, rgb2);
-
-	vector<Mat> result;
-	Mat merged, res, Br, Bg, Bb;
-	// For calculating B, you can use either getB1() or getB2()
-	Br = getB1(rgb1[0], rgb2[0], posX, posY, ROI);
-	//Br = getB2(rgb1[0], rgb2[0], posX, posY, ROI);
-	res = getResult(A, Br, ROI);
-	result.push_back(res);
-	cout << "R channel finished..." << endl;
-	Bg = getB1(rgb1[1], rgb2[1], posX, posY, ROI);
-	//Bg = getB2(rgb1[1], rgb2[1], posX, posY, ROI);
-	res = getResult(A, Bg, ROI);
-	result.push_back(res);
-	cout << "G channel finished..." << endl;
-	Bb = getB1(rgb1[2], rgb2[2], posX, posY, ROI);
-	//Bb = getB2(rgb1[2], rgb2[2], posX, posY, ROI);
-	res = getResult(A, Bb, ROI);
-	result.push_back(res);
-	cout << "B channel finished..." << endl;
-
-	// merge the 3 gray images into a 3-channel image 
-	merge(result, merged);
-	return merged;
-}
-
-int main(int argc, char** argv)
+Mat getLaplacian()
 {
-	long start, end;
-	start = clock();
-
-	
-	Mat img1, img2;
-	Mat in1 = imread("data/tree.jpg");
-	Mat in2 = imread("data/oceam.jpg");
-	imshow("src", in1);
-	waitKey(0);
-	imshow("dst", in2);
-	waitKey(0);
-
-	in1.convertTo(img1, CV_64FC3);
-	in2.convertTo(img2, CV_64FC3);
-
-	Rect rc = Rect(92, 40, 55, 90);
-	Mat result = poisson_blending(img1, img2, rc, 184, 220);
-
-	result.convertTo(result, CV_8UC1);
-	Rect rc2 = Rect(184, 220, 55, 90);
-	Mat roimat = in2(rc2);
-	result.copyTo(roimat);
-
-	end = clock();
-	cout << "used time: " << ((double)(end - start)) / CLOCKS_PER_SEC << " second" << endl;
-	imshow("roi", result);
-	imshow("result", in2);
-
-	waitKey(0);
-	return 0;
-
-	std::cout << "Hello world" << std::endl;
-
+	Mat laplacian = Mat::zeros(3, 3, CV_64FC1);
+	laplacian.ATD(0, 1) = 1.0;
+	laplacian.ATD(1, 0) = 1.0;
+	laplacian.ATD(1, 2) = 1.0;
+	laplacian.ATD(2, 1) = 1.0;
+	laplacian.ATD(1, 1) = -4.0;
+	return laplacian;
 }
-
